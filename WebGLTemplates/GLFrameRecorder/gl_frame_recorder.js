@@ -128,8 +128,8 @@ function checkError(gl, name) {
     else if (e == gl.CONTEXT_LOST_WEBGL) console.log(name, "ERR: CONTEXT_LOST_WEBGL");
 }
 let canvas = document.createElement('canvas');
-canvas.width = ${this._canvasWidth};
-canvas.height = ${this._canvasHeight};
+canvas.width = ${this._canvasWidth} * window.devicePixelRatio;
+canvas.height = ${this._canvasHeight} * window.devicePixelRatio;
 canvas.style = "width: 100%; height: 100%;";
 document.body.append(canvas);
 let gl = canvas.getContext("webgl2");
@@ -137,11 +137,16 @@ console.log("INITIALIZE");
 initialize(gl);
 checkError(gl, "Initialize");
 
+let frameLabel = document.createElement("div");
+frameLabel.style = "position: absolute; top: 10px; left: 10px; font-size: 18pt; color: #fff;";
+document.body.append(frameLabel);
+
 let frame = 0;
 function drawFrame() {
     requestAnimationFrame(drawFrame);
     if (frame >= frames.length) frame = frames.length - 1;
-    console.log("FRAME", frame);
+    //console.log("FRAME", frame);
+    frameLabel.innerText = "Frame: " + frame;
     frames[frame](gl);
     checkError(gl, "FRAME" + frame);
     frame++;
