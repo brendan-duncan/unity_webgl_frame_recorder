@@ -378,12 +378,7 @@ document.body.append(resetButton);
             let len = args[5];
             let array = [];
             for (let i = offset; i < offset + len; ++i) {
-                let f = a[i];
-                // what to do here?
-                if (f == Infinity || isNaN(f)) {
-                    f = 0.0;
-                }
-                array.push(f);
+                array.push(a[i]);
             }
             argCopy.push(array);
         } else if (name == "bufferData") {
