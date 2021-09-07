@@ -24,9 +24,10 @@ var GLRecordFrame = {
     _objectMap: new Map(),
     _frameCount: 0,
     _maxFrames: 400,
+    _debugLines: 0,
     _currentFrameCommands: null,
     _arrayCache: [],
-    _exportName: "WebGLRecord.html",
+    _exportName: "WebGLRecord",
     _canvasWidth: 960,
     _canvasHeight: 600,
 
@@ -82,7 +83,7 @@ var GLRecordFrame = {
     },
 
     exportRecord: function() {
-        console.log("EXPORTING", this._exportName);
+        console.log("EXPORTING", this._exportName + ".html");
         let cs = `<html><head></head><body><script>\n`;
 
         cs += "// Prefix\n";
@@ -93,9 +94,13 @@ var GLRecordFrame = {
             cs += "new " + this._arrayCache[ai].type + "([" + this._arrayCache[ai].array.toString() + "])\n";
         }
         cs += "];\n";
+        cs += "let _frame = -1;\nlet _line = 0;\n";
         cs += "function initialize(gl) {\n";
+        let line = 0;
         for (let i = 0; i < this._prefixCommands.length; ++i) {
             let c = this._prefixCommands[i];
+            cs += "_line = " + line + ";\n";
+            line++;
             cs += this._exportCommand(c);
         }
         cs += "}\n\n";
@@ -103,9 +108,12 @@ var GLRecordFrame = {
         for (let i = 0; i < this._frameCommands.length; ++i) {
             let cmds = this._frameCommands[i];
             cs += "// Frame " + i + "\n";
-            cs += "function frame_" + i + "(gl) {\n";
+            cs += "function frame_" + i + "(gl) {\n_frame = " + i + ";\n";
             for (let j = 0; j < cmds.length; ++j) {
                 let c = cmds[j];
+                if (this._debugLines)
+                    cs += "_line = " + line + ";\n";
+                line++;
                 cs += this._exportCommand(c);
             }
             cs += "}\n\n";
@@ -120,19 +128,35 @@ for (let i = 0; i < this._frameCommands.length; ++i) {
 cs += `];
 function checkError(gl, name) {
     let e = gl.getError();
-    if (e == gl.INVALID_ENUM) console.log(name, "ERR: INVALID_ENUM");
-    else if (e == gl.INVALID_VALUE) console.log(name, "ERR: INVALID_VALUE");
-    else if (e == gl.INVALID_OPERATION) console.log(name, "ERR: INVALID_OPERATION");
-    else if (e == gl.INVALID_FRAMEBUFFER_OPERATION) console.log(name, "ERR: INVALID_FRAMEBUFFER_OPERATION");
-    else if (e == gl.OUT_OF_MEMORY) console.log(name, "ERR: OUT_OF_MEMORY");
-    else if (e == gl.CONTEXT_LOST_WEBGL) console.log(name, "ERR: CONTEXT_LOST_WEBGL");
+    let line = ${this._debugLines} ? "Line:" + _line : "";
+    if (e == gl.INVALID_ENUM) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_ENUM");
+    else if (e == gl.INVALID_VALUE) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_VALUE");
+    else if (e == gl.INVALID_OPERATION) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_OPERATION");
+    else if (e == gl.INVALID_FRAMEBUFFER_OPERATION) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_FRAMEBUFFER_OPERATION");
+    else if (e == gl.OUT_OF_MEMORY) console.log("ERROR", name, "Frame:" + _frame, line, "ERR: OUT_OF_MEMORY");
+    else if (e == gl.CONTEXT_LOST_WEBGL) console.log("ERROR", name, "Frame:" + _frame, line, "CONTEXT_LOST_WEBGL");
 }
 let canvas = document.createElement('canvas');
-canvas.width = ${this._canvasWidth} * window.devicePixelRatio;
-canvas.height = ${this._canvasHeight} * window.devicePixelRatio;
+canvas.width = ${this._canvasWidth};
+canvas.height = ${this._canvasHeight};
 canvas.style = "width: 100%; height: 100%;";
 document.body.append(canvas);
 let gl = canvas.getContext("webgl2");
+
+for (var m in gl) {
+    if (typeof(gl[m]) == 'function')
+    {
+        let name = m;
+        if (name == "getError") continue;
+        let origFunction = gl[m];
+        gl[m] = function() {
+            let res = origFunction.call(gl, ...arguments);
+            checkError(gl, name);
+            return res;
+        }
+    }
+}
+
 console.log("INITIALIZE");
 initialize(gl);
 checkError(gl, "Initialize");
@@ -145,7 +169,6 @@ let frame = 0;
 function drawFrame() {
     requestAnimationFrame(drawFrame);
     if (frame >= frames.length) frame = frames.length - 1;
-    //console.log("FRAME", frame);
     frameLabel.innerText = "Frame: " + frame;
     frames[frame](gl);
     checkError(gl, "FRAME" + frame);
@@ -158,7 +181,7 @@ requestAnimationFrame(drawFrame);
 
         const link = document.createElement('a');
         link.href = URL.createObjectURL(new Blob([cs], {type: 'application/javascript'}));
-        link.download = this._exportName || 'GLRecord.html';
+        link.download = (this._exportName || 'WebGLRecord') + ".html";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -462,10 +485,11 @@ let configData = document.getElementById("gl_frame_recorder");
 if (configData) {
     try {
         let data = JSON.parse(configData.text);
-        GLRecordFrame._maxFrames = data["frames"] || GLRecordFrame._maxFrames;
+        GLRecordFrame._maxFrames = parseInt(data["frames"] || GLRecordFrame._maxFrames);
         GLRecordFrame._exportName = data["export"] || GLRecordFrame._exportName;
-        GLRecordFrame._canvasWidth = data["width"] || GLRecordFrame._canvasWidth;
-        GLRecordFrame._canvasHeight = data["height"] || GLRecordFrame._canvasHeight;
+        GLRecordFrame._canvasWidth = parseInt(data["width"] || GLRecordFrame._canvasWidth);
+        GLRecordFrame._canvasHeight = parseInt(data["height"] || GLRecordFrame._canvasHeight);
+        GLRecordFrame._debugLines = parseInt(data["lines"] || GLRecordFrame._debugLines);
     } catch (error) {
         //
     }
