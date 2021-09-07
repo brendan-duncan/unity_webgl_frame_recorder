@@ -32,13 +32,7 @@ var GLRecordFrame = {
     _canvasHeight: 600,
 
     _commentCommands: [
-        //"clientWaitSync",
-        //"deleteSync",
-        //"fenceSync",
-        //"compressedTexSubImage2D",
         //"getParameter",
-        //"getInternalformatParameter",
-        //"getSupportedExtensions"
     ],
 
     _excludeCommands: [
@@ -255,6 +249,18 @@ document.body.append(resetButton);
         this._startRecordFrame = true;
     },
 
+    _validateCacheData: function(ai, view) {
+        let a = this._arrayCache[ai].array;
+        if (a.length != view.length)
+            return false;
+        for (let i = 0, l = a.length; i < l; ++i) {
+            if (a[i] != view[i]) {
+                return false;
+            }
+        }
+        return true;
+    },
+
     _recordCommand: function(array, name, args) {
         if (!this._commandToIDMap[name]) {
             this._commandToIDMap[name] = this._lastCommandId;
@@ -267,15 +273,17 @@ document.body.append(resetButton);
         var self = this;
         var _getCache = function(a, offset, len) {
             let cacheIndex = -1;
+            let view = new a.constructor(a.buffer, offset, len);
             for (let ai = 0; ai < self._arrayCache.length; ++ai) {
                 let c = self._arrayCache[ai];
                 if (c.buffer == a.buffer && c.offset == offset && c.length == len) {
-                    cacheIndex = ai;
-                    break;
+                    if (this._validateCacheData(ai, view)) {
+                        cacheIndex = ai;
+                        break;
+                    }
                 }
             }
             if (cacheIndex == -1) {
-                let view = new a.constructor(a.buffer, offset, len);
                 let array = a.constructor.from(view);
                 cacheIndex = self._arrayCache.length;
                 self._arrayCache.push({
@@ -369,8 +377,14 @@ document.body.append(resetButton);
             let offset = args[4];
             let len = args[5];
             let array = [];
-            for (let i = offset; i < offset + len; ++i)
-                array.push(a[i]);
+            for (let i = offset; i < offset + len; ++i) {
+                let f = a[i];
+                // what to do here?
+                if (f == Infinity || isNaN(f)) {
+                    f = 0.0;
+                }
+                array.push(f);
+            }
             argCopy.push(array);
         } else if (name == "bufferData") {
             argCopy.push(args[2]);
