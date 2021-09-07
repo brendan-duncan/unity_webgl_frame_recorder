@@ -277,7 +277,7 @@ document.body.append(resetButton);
             for (let ai = 0; ai < self._arrayCache.length; ++ai) {
                 let c = self._arrayCache[ai];
                 if (c.buffer == a.buffer && c.offset == offset && c.length == len) {
-                    if (this._validateCacheData(ai, view)) {
+                    if (self._validateCacheData(ai, view)) {
                         cacheIndex = ai;
                         break;
                     }
