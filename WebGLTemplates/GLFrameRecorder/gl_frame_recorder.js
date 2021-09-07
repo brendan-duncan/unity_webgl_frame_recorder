@@ -94,12 +94,12 @@ var GLRecordFrame = {
             cs += "new " + this._arrayCache[ai].type + "([" + this._arrayCache[ai].array.toString() + "])\n";
         }
         cs += "];\n";
-        cs += "let _frame = -1;\nlet _line = 0;\n";
+        cs += "let _frame = -1;\nlet L=0;\n";
         cs += "function initialize(gl) {\n";
         let line = 0;
         for (let i = 0; i < this._prefixCommands.length; ++i) {
             let c = this._prefixCommands[i];
-            cs += "_line = " + line + ";\n";
+            cs += "L=" + line + ";\n";
             line++;
             cs += this._exportCommand(c, false);
         }
@@ -113,7 +113,7 @@ var GLRecordFrame = {
             for (let j = 0; j < cmds.length; ++j) {
                 let c = cmds[j];
                 if (this._debugLines)
-                    cs += "_line = " + line + ";\n";
+                    cs += "L=" + line + ";\n";
                 line++;
                 cs += this._exportCommand(c, lastFrame);
             }
@@ -129,7 +129,7 @@ for (let i = 0; i < this._frameCommands.length; ++i) {
 cs += `];
 function checkError(gl, name) {
     let e = gl.getError();
-    let line = ${this._debugLines} ? "Line:" + _line : "";
+    let line = ${this._debugLines} ? "Line:" + L : "";
     if (e == gl.INVALID_ENUM) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_ENUM");
     else if (e == gl.INVALID_VALUE) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_VALUE");
     else if (e == gl.INVALID_OPERATION) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_OPERATION");
@@ -163,7 +163,7 @@ initialize(gl);
 checkError(gl, "Initialize");
 
 let frameLabel = document.createElement("div");
-frameLabel.style = "position: absolute; top: 10px; left: 10px; font-size: 18pt; color: #fff;";
+frameLabel.style = "position: absolute; top: 10px; left: 10px; font-size: 24pt; color: #f00;";
 document.body.append(frameLabel);
 
 let frame = 0;
