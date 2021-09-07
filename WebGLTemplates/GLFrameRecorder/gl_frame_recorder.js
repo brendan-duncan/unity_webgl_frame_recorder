@@ -35,7 +35,7 @@ var GLRecordFrame = {
         "clientWaitSync",
         "deleteSync",
         "fenceSync",
-        "compressedTexSubImage2D",
+        //"compressedTexSubImage2D",
         "getParameter",
         "getInternalformatParameter",
         "getSupportedExtensions"
@@ -281,6 +281,23 @@ requestAnimationFrame(drawFrame);
 
             argCopy.push(new GLRecordArray(cacheIndex));
             argCopy.push(0);
+        } else if (name == "compressedTexSubImage2D") {
+            argCopy.push(args[2]);
+            argCopy.push(args[3]);
+            argCopy.push(args[4]);
+            argCopy.push(args[5]);
+            argCopy.push(args[6]);
+            argCopy.push(args[7]);
+            argCopy.push(args[8]);
+
+            let a = args[9];
+            let offset = args[10];
+            let len = args[11];
+
+            let cacheIndex = _getCache(a, offset, len);
+            argCopy.push(new GLRecordArray(cacheIndex));
+            argCopy.push(0);
+            argCopy.push(len);
         } else if (name == "uniform1fv" || name == "uniform2fv" || name == "uniform3fv" || name == "uniform4fv") {
             argCopy.push(args[2]);
 
@@ -477,7 +494,8 @@ window.exportGLRecord = function() {
 // Get configuration settings from the html in the form:
 // <script id="gl_frame_recorder" type="application/json">{
 //    "frames": 400,
-//    "export": "GLRecord.html",
+//    "lines": 0
+//    "export": "WebGLRecord",
 //    "width": 960,
 //    "height": 600
 // }</script>
