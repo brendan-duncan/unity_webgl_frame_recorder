@@ -32,9 +32,9 @@ var GLRecordFrame = {
     _canvasHeight: 600,
 
     _commentCommands: [
-        "clientWaitSync",
-        "deleteSync",
-        "fenceSync",
+        //"clientWaitSync",
+        //"deleteSync",
+        //"fenceSync",
         //"compressedTexSubImage2D",
         //"getParameter",
         //"getInternalformatParameter",
@@ -67,10 +67,10 @@ var GLRecordFrame = {
         }
     },
 
-    _exportCommand: function(c) {
+    _exportCommand: function(c, lastFrame) {
         let cs = "";
         let name = this._idToCommandMap[c[0]];
-        if (this._commentCommands.indexOf(name) != -1)
+        if (this._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "clientWaitSync")))
             cs += "//";
 
         if (c[1] != -1) {
@@ -101,11 +101,12 @@ var GLRecordFrame = {
             let c = this._prefixCommands[i];
             cs += "_line = " + line + ";\n";
             line++;
-            cs += this._exportCommand(c);
+            cs += this._exportCommand(c, false);
         }
         cs += "}\n\n";
 
         for (let i = 0; i < this._frameCommands.length; ++i) {
+            let lastFrame = i == this._frameCommands.length - 1;
             let cmds = this._frameCommands[i];
             cs += "// Frame " + i + "\n";
             cs += "function frame_" + i + "(gl) {\n_frame = " + i + ";\n";
@@ -114,7 +115,7 @@ var GLRecordFrame = {
                 if (this._debugLines)
                     cs += "_line = " + line + ";\n";
                 line++;
-                cs += this._exportCommand(c);
+                cs += this._exportCommand(c, lastFrame);
             }
             cs += "}\n\n";
         }
@@ -139,7 +140,7 @@ function checkError(gl, name) {
 let canvas = document.createElement('canvas');
 canvas.width = ${this._canvasWidth};
 canvas.height = ${this._canvasHeight};
-canvas.style = "width: 100%; height: 100%;";
+canvas.style = "width: ${this._canvasWidth}px; height: ${this._canvasHeight}px;";
 document.body.append(canvas);
 let gl = canvas.getContext("webgl2");
 
@@ -175,6 +176,17 @@ function drawFrame() {
     frame++;
 }
 requestAnimationFrame(drawFrame);
+
+let resetButton = document.createElement('button');
+resetButton.style = "display: block;";
+resetButton.innerText = "RESET FRAMES";
+resetButton.addEventListener('click', function() {
+    initialize(gl);
+    checkError(gl, "Initialize");
+    frame = 0;
+});
+document.body.append(resetButton);
+
 </script>
 </body>
 `;

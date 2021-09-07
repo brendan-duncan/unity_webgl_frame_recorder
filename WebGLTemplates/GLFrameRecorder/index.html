@@ -9,9 +9,9 @@
     <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} style="width: {{{ WIDTH }}}px; height: {{{ HEIGHT }}}px; background: {{{ BACKGROUND_FILENAME ? 'url(\'Build/' + BACKGROUND_FILENAME.replace(/'/g, '%27') + '\') center / cover' : BACKGROUND_COLOR }}}"></canvas>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
     <script id="gl_frame_recorder" type="application/json">{
-        "frames": "{{{ FRAMES }}}",
-        "export": "{{{ NAME }}}",
-        "lines": "{{{ DEBUG }}}",
+        "frames": "{{{ NUMBER_OF_FRAMES }}}",
+        "export": "{{{ EXPORT_NAME }}}",
+        "lines": "{{{ CHECK_EVERY_COMMAND }}}",
         "width": {{{ WIDTH }}},
         "height": {{{ HEIGHT }}}
     }</script>
