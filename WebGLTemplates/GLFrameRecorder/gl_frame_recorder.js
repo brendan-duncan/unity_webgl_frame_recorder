@@ -36,9 +36,9 @@ var GLRecordFrame = {
         "deleteSync",
         "fenceSync",
         //"compressedTexSubImage2D",
-        "getParameter",
-        "getInternalformatParameter",
-        "getSupportedExtensions"
+        //"getParameter",
+        //"getInternalformatParameter",
+        //"getSupportedExtensions"
     ],
 
     _excludeCommands: [
