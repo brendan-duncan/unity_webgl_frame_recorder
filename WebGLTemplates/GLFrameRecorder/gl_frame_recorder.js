@@ -74,7 +74,7 @@ var GLRecordFrame = {
             cs += "//";
 
         if (c[1] != -1) {
-            cs += "_G[" + c[1] + "] = ";
+            cs += "G[" + c[1] + "] = ";
         }
         cs += "gl." + name + "(";
         cs += this._argString(c[2]);
@@ -82,16 +82,35 @@ var GLRecordFrame = {
         return cs;
     },
 
+    _encodeBase64: function(array) {
+        let i, s = [], len = array.length;
+        for (i = 0; i < len; i++) s.push(String.fromCharCode(array[i]));
+        return btoa(s.join(''));
+    },
+
+    _arrayToBase64: function(array) {
+        return this._encodeBase64(new Uint8Array(array.buffer));
+    },
+
     exportRecord: function() {
         console.log("EXPORTING", this._exportName + ".html");
-        let cs = `<html><head></head><body><script>\n`;
+        let cs = `<html><head></head><body style="text-align: center;"><script>\n`;
 
         cs += "// Prefix\n";
-        cs += "let _G = {};\n";
-        cs += "let _A = [\n"
+        cs += "let G = {};\n";
+        cs += "let Atypes = [\n";
         for (let ai = 0; ai < this._arrayCache.length; ++ai) {
             if (ai != 0) cs += ",";
-            cs += "new " + this._arrayCache[ai].type + "([" + this._arrayCache[ai].array.toString() + "])\n";
+            cs += this._arrayCache[ai].type + '\n';
+        }
+        cs += "];\n";
+        cs += "let A = [\n";
+        for (let ai = 0; ai < this._arrayCache.length; ++ai) {
+            if (ai != 0) cs += ",";
+            let a = this._arrayCache[ai].array;
+
+            let arrayStr = this._arrayToBase64(a);
+            cs += '"' + arrayStr + '"\n';
         }
         cs += "];\n";
         cs += "let _frame = -1;\nlet L=0;\n";
@@ -130,12 +149,12 @@ cs += `];
 function checkError(gl, name) {
     let e = gl.getError();
     let line = ${this._debugLines} ? "Line:" + L : "";
-    if (e == gl.INVALID_ENUM) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_ENUM");
-    else if (e == gl.INVALID_VALUE) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_VALUE");
-    else if (e == gl.INVALID_OPERATION) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_OPERATION");
-    else if (e == gl.INVALID_FRAMEBUFFER_OPERATION) console.log("ERROR", name, "Frame:" + _frame, line, "INVALID_FRAMEBUFFER_OPERATION");
-    else if (e == gl.OUT_OF_MEMORY) console.log("ERROR", name, "Frame:" + _frame, line, "ERR: OUT_OF_MEMORY");
-    else if (e == gl.CONTEXT_LOST_WEBGL) console.log("ERROR", name, "Frame:" + _frame, line, "CONTEXT_LOST_WEBGL");
+    if (e == gl.INVALID_ENUM) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_ENUM");
+    else if (e == gl.INVALID_VALUE) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_VALUE");
+    else if (e == gl.INVALID_OPERATION) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_OPERATION");
+    else if (e == gl.INVALID_FRAMEBUFFER_OPERATION) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_FRAMEBUFFER_OPERATION");
+    else if (e == gl.OUT_OF_MEMORY) console.error("ERROR", name, "Frame:" + _frame, line, "ERR: OUT_OF_MEMORY");
+    else if (e == gl.CONTEXT_LOST_WEBGL) console.error("ERROR", name, "Frame:" + _frame, line, "CONTEXT_LOST_WEBGL");
 }
 let canvas = document.createElement('canvas');
 canvas.width = ${this._canvasWidth};
@@ -144,21 +163,54 @@ canvas.style = "width: ${this._canvasWidth}px; height: ${this._canvasHeight}px;"
 document.body.append(canvas);
 let gl = canvas.getContext("webgl2");
 
-for (var m in gl) {
-    if (typeof(gl[m]) == 'function')
-    {
-        let name = m;
-        if (name == "getError") continue;
-        let origFunction = gl[m];
-        gl[m] = function() {
-            let res = origFunction.call(gl, ...arguments);
-            checkError(gl, name);
-            return res;
+if (${this._debugLines}) {
+    for (var m in gl) {
+        if (typeof(gl[m]) == 'function') {
+            let name = m;
+            if (name == "getError") continue;
+            let origFunction = gl[m];
+            gl[m] = function() {
+                let res = origFunction.call(gl, ...arguments);
+                checkError(gl, name);
+                return res;
+            }
         }
     }
 }
 
-console.log("INITIALIZE");
+function decodeBase64(s) {
+    let i, d = atob(s), b = new Uint8Array(d.length);
+    for (i = 0; i < d.length; i++) b[i] = d.charCodeAt(i);
+    return b;
+}
+
+function base64ToArray(aType, s) {
+    let blob = decodeBase64(s);
+    let fLen = blob.length / aType.BYTES_PER_ELEMENT;
+    let dView = new DataView(new ArrayBuffer(aType.BYTES_PER_ELEMENT));
+    let out = new aType(fLen);
+    let p = 0;
+    for (let i = 0; i < fLen; ++i) {
+        p = i * aType.BYTES_PER_ELEMENT;
+        for (let j = 0; j < aType.BYTES_PER_ELEMENT; ++j) {
+            dView.setUint8(0, blob[p + j]);
+        }
+        out[i] = aType == Float32Array ? dView.getFloat32(0, true) :
+                 aType == Float64Array ? dView.getFloat64(0, true) :
+                 aType == Int16Array ? dView.getInt16(0, true) :
+                 aType == Uint16Array ? dView.getUint16(0, true) :
+                 aType == Uint8Array ? dView.getUint8(0, true) :
+                 aType == Int8Array ? dView.getInt8(0, true) :
+                 0;
+    }
+    return out;
+}
+
+// Arrays are stored in base64. Decode them to their original form (Uint8Array, Float32Array, etc).
+for (let i = 0; i < A.length; ++i) {
+    A[i] = base64ToArray(Atypes[i], A[i]);
+}
+
 initialize(gl);
 checkError(gl, "Initialize");
 
@@ -456,9 +508,9 @@ document.body.append(resetButton);
             if (a === null || a === undefined) {
                 s += "null";
             } else if (a instanceof GLRecordObject) {
-                s += "_G[" + a.name + "]";
+                s += "G[" + a.name + "]";
             } else if (a instanceof GLRecordArray) {
-                s += "_A[" + a.index + "]";
+                s += "A[" + a.index + "]";
             } else if (typeof(a) == "string") {
                 s += "`" + a + "`";
             } else if (Array.isArray(a)) {
@@ -471,7 +523,7 @@ document.body.append(resetButton);
                 } else {
                     let b = this._objectMap.get(a);
                     if (b) {
-                        s += "_G[" + b + "]";
+                        s += "G[" + b + "]";
                     } else {
                         s += a.constructor.name + JSON.stringify(a);
                     }
