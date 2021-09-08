@@ -46,7 +46,7 @@ var GLRecordFrame = {
             this._currentFrameCommands = [];
             this._frameCommands.push(this._currentFrameCommands);
         } else {
-            if (this._frameCount == this._maxFrames) {
+            if (this._frameCount == (this._maxFrames + 1)) {
                 this.exportRecord();
             }
             this._currentFrameCommands = null;
@@ -64,7 +64,7 @@ var GLRecordFrame = {
     _exportCommand: function(c, lastFrame) {
         let cs = "";
         let name = this._idToCommandMap[c[0]];
-        if (this._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "clientWaitSync")))
+        if (this._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "fenceSync")))
             cs += "//";
 
         if (c[1] != -1) {
@@ -72,7 +72,33 @@ var GLRecordFrame = {
         }
         cs += "gl." + name + "(";
         cs += this._argString(c[2]);
-        cs += ");\n";
+        cs += ");";
+        /*if (c[1] != -1) {
+            cs += "F[f][G[" + c[1] + "]]=";
+            let createCommands = {
+                "fenceSync": "deleteSync",
+                "createBuffer": "deleteBuffer",
+                "createTexture": "deleteTexture",
+                "createProgram": "deleteProgram",
+                "createShader": "deleteShader"
+
+            };
+            cs += createCommands[name] || 0;
+            cs += ";X[" + c[1]; + "]=f;\n";
+        }
+        let deleteCommands = [
+            "deleteSync",
+            "deleteBuffer",
+            "deleteTexture",
+            "deleteProgram",
+            "deleteShader"
+        ];
+        if (deleteCommands.indexOf(name) != -1) {
+            let b = this._objectMap.get(c[2][0]);
+            cs += "F[X[G[" + b + "]]]=0;X[G[" + b + "]]=0;\n";
+        }*/
+
+        cs += "\n";
         return cs;
     },
 
@@ -115,8 +141,8 @@ var GLRecordFrame = {
         let cs = `<html><head></head><body style="text-align: center;"><script>\n`;
 
         cs += "// Unity WebGL Recording\n";
-        cs += "let G = {};\nlet A = [];\n";
-        cs += "let _frame = -1;\nlet L=0;\n";
+        cs += "let G = {};\nlet A = []; let F = {}; let X = {};\n";
+        cs += "let f = -1;\nlet L=0;\n";
         cs += "function initialize(gl) {\n";
         let line = 0;
         for (let i = 0; i < this._prefixCommands.length; ++i) {
@@ -132,7 +158,7 @@ var GLRecordFrame = {
             let lastFrame = i == this._frameCommands.length - 1;
             let cmds = this._frameCommands[i];
             cs += "// Frame " + i + "\n";
-            cs += "function frame_" + i + "(gl) {\n_frame = " + i + ";\n";
+            cs += "function frame_" + i + "(gl) {\nf = " + i + ";\nF[" + i + "]={};\n";
             for (let j = 0; j < cmds.length; ++j) {
                 let c = cmds[j];
                 if (this._debugLines)
@@ -153,12 +179,12 @@ let frames = [\n`;
 function checkError(gl, name) {
     let e = gl.getError();
     let line = ${this._debugLines} ? "Line:" + L : "";
-    if (e == gl.INVALID_ENUM) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_ENUM");
-    else if (e == gl.INVALID_VALUE) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_VALUE");
-    else if (e == gl.INVALID_OPERATION) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_OPERATION");
-    else if (e == gl.INVALID_FRAMEBUFFER_OPERATION) console.error("ERROR", name, "Frame:" + _frame, line, "INVALID_FRAMEBUFFER_OPERATION");
-    else if (e == gl.OUT_OF_MEMORY) console.error("ERROR", name, "Frame:" + _frame, line, "ERR: OUT_OF_MEMORY");
-    else if (e == gl.CONTEXT_LOST_WEBGL) console.error("ERROR", name, "Frame:" + _frame, line, "CONTEXT_LOST_WEBGL");
+    if (e == gl.INVALID_ENUM) console.error("ERROR", name, "Frame:" + f, line, "INVALID_ENUM");
+    else if (e == gl.INVALID_VALUE) console.error("ERROR", name, "Frame:" + f, line, "INVALID_VALUE");
+    else if (e == gl.INVALID_OPERATION) console.error("ERROR", name, "Frame:" + f, line, "INVALID_OPERATION");
+    else if (e == gl.INVALID_FRAMEBUFFER_OPERATION) console.error("ERROR", name, "Frame:" + f, line, "INVALID_FRAMEBUFFER_OPERATION");
+    else if (e == gl.OUT_OF_MEMORY) console.error("ERROR", name, "Frame:" + f, line, "ERR: OUT_OF_MEMORY");
+    else if (e == gl.CONTEXT_LOST_WEBGL) console.error("ERROR", name, "Frame:" + f, line, "CONTEXT_LOST_WEBGL");
 }
 
 function decodeBase64(str) {
