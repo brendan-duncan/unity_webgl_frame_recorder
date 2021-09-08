@@ -245,10 +245,13 @@ function main() {
     document.body.append(frameLabel);
 
     let frame = 0;
+    let t0 = performance.now();
     function drawFrame() {
         requestAnimationFrame(drawFrame);
         if (frame >= frames.length) frame = frames.length - 1;
-        frameLabel.innerText = "Frame: " + frame;
+        let t1 = performance.now();
+        frameLabel.innerText = "F: " + frame + "  T:" + (t1 - t0).toFixed(2);
+        t0 = t1;
         frames[frame](gl);
         checkError(gl, "FRAME" + frame);
         frame++;
