@@ -68,7 +68,7 @@ var GLRecordFrame = {
             cs += "//";
 
         if (c[1] != -1) {
-            cs += "G[" + c[1] + "] = ";
+            cs += "G[" + c[1] + "]=";
         }
         cs += "gl." + name + "(";
         cs += this._argString(c[2]);
@@ -76,45 +76,55 @@ var GLRecordFrame = {
         return cs;
     },
 
-    _encodeBase64: function(array) {
-        let i, s = [], len = array.length;
-        for (i = 0; i < len; i++) s.push(String.fromCharCode(array[i]));
-        return btoa(s.join(''));
+    _encodeBase64: function(bytes) {
+        const _b2a = [
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+            "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+            "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"
+        ];
+
+        let result = '', i, l = bytes.length;
+        for (i = 2; i < l; i += 3) {
+            result += _b2a[bytes[i - 2] >> 2];
+            result += _b2a[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
+            result += _b2a[((bytes[i - 1] & 0x0F) << 2) | (bytes[i] >> 6)];
+            result += _b2a[bytes[i] & 0x3F];
+        }
+        if (i === l + 1) { // 1 octet yet to write
+            result += _b2a[bytes[i - 2] >> 2];
+            result += _b2a[(bytes[i - 2] & 0x03) << 4];
+            result += "==";
+        }
+        if (i === l) { // 2 octets yet to write
+            result += _b2a[bytes[i - 2] >> 2];
+            result += _b2a[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
+            result += _b2a[(bytes[i - 1] & 0x0F) << 2];
+            result += "=";
+        }
+        return result;
     },
 
-    _arrayToBase64: function(array) {
-        return this._encodeBase64(new Uint8Array(array.buffer));
+    _arrayToBase64: function(a) {
+        return this._encodeBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
     },
 
     exportRecord: function() {
         console.log("EXPORTING", this._exportName + ".html");
         let cs = `<html><head></head><body style="text-align: center;"><script>\n`;
 
-        cs += "// Prefix\n";
-        cs += "let G = {};\n";
-        cs += "let Atypes = [\n";
-        for (let ai = 0; ai < this._arrayCache.length; ++ai) {
-            if (ai != 0) cs += ",";
-            cs += this._arrayCache[ai].type + '\n';
-        }
-        cs += "];\n";
-        cs += "let A = [\n";
-        for (let ai = 0; ai < this._arrayCache.length; ++ai) {
-            if (ai != 0) cs += ",";
-            let a = this._arrayCache[ai].array;
-
-            let arrayStr = this._arrayToBase64(a);
-            cs += '"' + arrayStr + '"\n';
-        }
-        cs += "];\n";
+        cs += "// Unity WebGL Recording\n";
+        cs += "let G = {};\nlet A = [];\n";
         cs += "let _frame = -1;\nlet L=0;\n";
         cs += "function initialize(gl) {\n";
         let line = 0;
         for (let i = 0; i < this._prefixCommands.length; ++i) {
             let c = this._prefixCommands[i];
-            cs += "L=" + line + ";\n";
-            line++;
+            if (this._debugLines)
+                cs += "L=" + line + "; ";
             cs += this._exportCommand(c, false);
+            line++;
         }
         cs += "}\n\n";
 
@@ -126,20 +136,20 @@ var GLRecordFrame = {
             for (let j = 0; j < cmds.length; ++j) {
                 let c = cmds[j];
                 if (this._debugLines)
-                    cs += "L=" + line + ";\n";
-                line++;
+                    cs += "L=" + line + "; ";
                 cs += this._exportCommand(c, lastFrame);
+                line++;
             }
             cs += "}\n\n";
         }
 
         cs += `
 let frames = [\n`;
-for (let i = 0; i < this._frameCommands.length; ++i) {
-    if (i != 0) cs += ', ';
-    cs += 'frame_' + i + '\n';
-}
-cs += `];
+    for (let i = 0; i < this._frameCommands.length; ++i) {
+        if (i != 0) cs += ', ';
+        cs += 'frame_' + i + '\n';
+    }
+    cs += `];
 function checkError(gl, name) {
     let e = gl.getError();
     let line = ${this._debugLines} ? "Line:" + L : "";
@@ -150,88 +160,123 @@ function checkError(gl, name) {
     else if (e == gl.OUT_OF_MEMORY) console.error("ERROR", name, "Frame:" + _frame, line, "ERR: OUT_OF_MEMORY");
     else if (e == gl.CONTEXT_LOST_WEBGL) console.error("ERROR", name, "Frame:" + _frame, line, "CONTEXT_LOST_WEBGL");
 }
-let canvas = document.createElement('canvas');
-canvas.width = ${this._canvasWidth};
-canvas.height = ${this._canvasHeight};
-canvas.style = "width: ${this._canvasWidth}px; height: ${this._canvasHeight}px;";
-document.body.append(canvas);
-let gl = canvas.getContext("webgl2");
 
-if (${this._debugLines}) {
-    for (var m in gl) {
-        if (typeof(gl[m]) == 'function') {
-            let name = m;
-            if (name == "getError") continue;
-            let origFunction = gl[m];
-            gl[m] = function() {
-                let res = origFunction.call(gl, ...arguments);
-                checkError(gl, name);
-                return res;
+function decodeBase64(str) {
+    const base64codes = [
+        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63,
+        52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255,
+        255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255,
+        255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+    ];
+
+    function getBase64Code(charCode) {
+        if (charCode >= base64codes.length) {
+            throw new Error("Unable to parse base64 string.");
+        }
+        const code = base64codes[charCode];
+        if (code === 255) {
+            throw new Error("Unable to parse base64 string.");
+        }
+        return code;
+    }
+
+    if (str.length % 4 !== 0) {
+        throw new Error("Unable to parse base64 string.");
+    }
+
+    const index = str.indexOf("=");
+    if (index !== -1 && index < str.length - 2) {
+        throw new Error("Unable to parse base64 string.");
+    }
+
+    let missingOctets = str.endsWith("==") ? 2 : str.endsWith("=") ? 1 : 0;
+    let n = str.length;
+    let result = new Uint8Array(3 * (n / 4));
+    for (let i = 0, j = 0; i < n; i += 4, j += 3) {
+        let buffer =
+            getBase64Code(str.charCodeAt(i)) << 18 |
+            getBase64Code(str.charCodeAt(i + 1)) << 12 |
+            getBase64Code(str.charCodeAt(i + 2)) << 6 |
+            getBase64Code(str.charCodeAt(i + 3));
+        result[j] = buffer >> 16;
+        result[j + 1] = (buffer >> 8) & 0xFF;
+        result[j + 2] = buffer & 0xFF;
+    }
+    return result.subarray(0, result.length - missingOctets);
+}
+
+function B64ToA(aType, s) {
+    let x = decodeBase64(s);
+    return new aType(x.buffer, 0, x.length / aType.BYTES_PER_ELEMENT);
+}
+
+function main() {
+    let canvas = document.createElement('canvas');
+    canvas.width = ${this._canvasWidth};
+    canvas.height = ${this._canvasHeight};
+    canvas.style = "width: ${this._canvasWidth}px; height: ${this._canvasHeight}px;";
+    document.body.append(canvas);
+    let gl = canvas.getContext("webgl2");
+
+    if (${this._debugLines}) {
+        for (var m in gl) {
+            if (typeof(gl[m]) == 'function') {
+                let name = m;
+                if (name == "getError") continue;
+                let origFunction = gl[m];
+                gl[m] = function() {
+                    let res = origFunction.call(gl, ...arguments);
+                    checkError(gl, name);
+                    return res;
+                }
             }
         }
     }
-}
 
-function decodeBase64(s) {
-    let i, d = atob(s), b = new Uint8Array(d.length);
-    for (i = 0; i < d.length; i++) b[i] = d.charCodeAt(i);
-    return b;
-}
-
-function base64ToArray(aType, s) {
-    let blob = decodeBase64(s);
-    let fLen = blob.length / aType.BYTES_PER_ELEMENT;
-    let dView = new DataView(new ArrayBuffer(aType.BYTES_PER_ELEMENT));
-    let out = new aType(fLen);
-    let p = 0;
-    for (let i = 0; i < fLen; ++i) {
-        p = i * aType.BYTES_PER_ELEMENT;
-        for (let j = 0; j < aType.BYTES_PER_ELEMENT; ++j) {
-            dView.setUint8(0, blob[p + j]);
-        }
-        out[i] = aType == Float32Array ? dView.getFloat32(0, true) :
-                 aType == Float64Array ? dView.getFloat64(0, true) :
-                 aType == Int16Array ? dView.getInt16(0, true) :
-                 aType == Uint16Array ? dView.getUint16(0, true) :
-                 aType == Uint8Array ? dView.getUint8(0, true) :
-                 aType == Int8Array ? dView.getInt8(0, true) :
-                 0;
-    }
-    return out;
-}
-
-// Arrays are stored in base64. Decode them to their original form (Uint8Array, Float32Array, etc).
-for (let i = 0; i < A.length; ++i) {
-    A[i] = base64ToArray(Atypes[i], A[i]);
-}
-
-initialize(gl);
-checkError(gl, "Initialize");
-
-let frameLabel = document.createElement("div");
-frameLabel.style = "position: absolute; top: 10px; left: 10px; font-size: 24pt; color: #f00;";
-document.body.append(frameLabel);
-
-let frame = 0;
-function drawFrame() {
-    requestAnimationFrame(drawFrame);
-    if (frame >= frames.length) frame = frames.length - 1;
-    frameLabel.innerText = "Frame: " + frame;
-    frames[frame](gl);
-    checkError(gl, "FRAME" + frame);
-    frame++;
-}
-requestAnimationFrame(drawFrame);
-
-let resetButton = document.createElement('button');
-resetButton.style = "display: block;";
-resetButton.innerText = "RESET FRAMES";
-resetButton.addEventListener('click', function() {
     initialize(gl);
     checkError(gl, "Initialize");
-    frame = 0;
-});
-document.body.append(resetButton);
+
+    let frameLabel = document.createElement("div");
+    frameLabel.style = "position: absolute; top: 10px; left: 10px; font-size: 24pt; color: #f00;";
+    document.body.append(frameLabel);
+
+    let frame = 0;
+    function drawFrame() {
+        requestAnimationFrame(drawFrame);
+        if (frame >= frames.length) frame = frames.length - 1;
+        frameLabel.innerText = "Frame: " + frame;
+        frames[frame](gl);
+        checkError(gl, "FRAME" + frame);
+        frame++;
+    }
+    requestAnimationFrame(drawFrame);
+
+    let resetButton = document.createElement('button');
+    resetButton.style = "display: block;";
+    resetButton.innerText = "RESET FRAMES";
+    resetButton.addEventListener('click', function() {
+        initialize(gl);
+        checkError(gl, "Initialize");
+        frame = 0;
+    });
+    document.body.append(resetButton);
+}\n`;
+
+    cs += "A = [\n";
+    for (let ai = 0; ai < this._arrayCache.length; ++ai) {
+        if (ai != 0) cs += ",";
+        let a = this._arrayCache[ai];
+        let b64 = this._arrayToBase64(a.array);
+
+        cs += 'B64ToA(' + a.type + ',  "' + b64 + '")\n';
+    }
+    cs += `];
+
+main();
 
 </script>
 </body>
@@ -249,18 +294,6 @@ document.body.append(resetButton);
         this._startRecordFrame = true;
     },
 
-    _validateCacheData: function(ai, view) {
-        let a = this._arrayCache[ai].array;
-        if (a.length != view.length)
-            return false;
-        for (let i = 0, l = a.length; i < l; ++i) {
-            if (a[i] != view[i]) {
-                return false;
-            }
-        }
-        return true;
-    },
-
     _recordCommand: function(array, name, args) {
         if (!this._commandToIDMap[name]) {
             this._commandToIDMap[name] = this._lastCommandId;
@@ -269,33 +302,77 @@ document.body.append(resetButton);
         }
 
         let argCopy = [];
-
         var self = this;
-        var _getCache = function(a, offset, len) {
+
+        function _byteSizeForWebGLType(type) {
+            type -= 5120;
+            if (type == 0) return 1;
+            if (type == 1) return 1;
+            if (type == 2) return 2;
+            if (type == 4) return 4;
+            if (type == 6) return 4;
+            if (type == 5 || type == 28922 || type == 28520 || type == 30779 || type == 30782) return 4;
+            return 2;
+        }
+
+        function _colorChannelsInGlTextureFormat(format) {
+            var colorChannels = {
+                5: 3,
+                6: 4,
+                8: 2,
+                29502: 3,
+                29504: 4,
+                26917: 2,
+                26918: 2,
+                29846: 3,
+                29847: 4
+            };
+            return colorChannels[format - 6402] || 1;
+        }
+
+        function _heapAccessShiftForWebGLHeap(heap) {
+            return 31 - Math.clz32(heap.BYTES_PER_ELEMENT);
+        }
+
+        function _validateCacheData(ai, view) {
+            let a = self._arrayCache[ai].array;
+            if (a.length != view.length) 
+                return false;
+            for (let i = 0, l = a.length; i < l; ++i) {
+                if (a[i] != view[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function _getCache(heap, offset, length) {
+            offset = offset << _heapAccessShiftForWebGLHeap(heap);
+            let view = new heap.constructor(heap.buffer, offset, length);
+
             let cacheIndex = -1;
-            let view = new a.constructor(a.buffer, offset, len);
             for (let ai = 0; ai < self._arrayCache.length; ++ai) {
                 let c = self._arrayCache[ai];
-                if (c.buffer == a.buffer && c.offset == offset && c.length == len) {
-                    if (self._validateCacheData(ai, view)) {
+                if (c.offset == offset && c.length == length) {
+                    if (_validateCacheData(ai, view)) {
                         cacheIndex = ai;
                         break;
                     }
                 }
             }
+
             if (cacheIndex == -1) {
-                let array = a.constructor.from(view);
                 cacheIndex = self._arrayCache.length;
+                let arrayCopy = heap.constructor.from(view);
                 self._arrayCache.push({
-                    buffer: a.buffer,
                     offset: offset,
-                    length: len,
-                    type: a.constructor.name,
-                    array: array
+                    length: length,
+                    type: heap.constructor.name,
+                    array: arrayCopy
                 });
             }
             return cacheIndex;
-        };
+        }
 
         if (name == "bufferSubData") {
             argCopy.push(args[2]);
@@ -311,43 +388,52 @@ document.body.append(resetButton);
             argCopy.push(0);
             argCopy.push(len);
         } else if (name == "texSubImage2D") {
-            argCopy.push(args[2]);
-            argCopy.push(args[3]);
-            argCopy.push(args[4]);
-            argCopy.push(args[5]);
-            argCopy.push(args[6]);
-            argCopy.push(args[7]);
-            argCopy.push(args[8]);
-            argCopy.push(args[9]);
+            argCopy.push(args[2]); // target
+            argCopy.push(args[3]); // level
+            argCopy.push(args[4]); // xoffset
+            argCopy.push(args[5]); // yoffset
+            argCopy.push(args[6]); // width
+            argCopy.push(args[7]); // height
+            argCopy.push(args[8]); // format
+            argCopy.push(args[9]); // type
 
-            let a = args[10];
-            let offset = args[11];
+            let a = args[10]; // pixels
+            let offset = args[11]; // srcOffset
             let w = args[6];
             let h = args[7];
-            let len = w * h * 4;
+            let format = args[8];
+            let type = args[9];
+            let channels = _colorChannelsInGlTextureFormat(format);
+            let channelSize = _byteSizeForWebGLType(type);
+            let len = w * h * channels * channelSize;
 
             let cacheIndex = _getCache(a, offset, len);
 
             argCopy.push(new GLRecordArray(cacheIndex));
             argCopy.push(0);
         } else if (name == "texSubImage3D") {
-            argCopy.push(args[2]);
-            argCopy.push(args[3]);
-            argCopy.push(args[4]);
-            argCopy.push(args[5]);
-            argCopy.push(args[6]);
-            argCopy.push(args[7]);
-            argCopy.push(args[8]);
-            argCopy.push(args[9]);
-            argCopy.push(args[10]);
-            argCopy.push(args[11]);
+            argCopy.push(args[2]); // target
+            argCopy.push(args[3]); // level
+            argCopy.push(args[4]); // xoffset
+            argCopy.push(args[5]); // yoffset
+            argCopy.push(args[6]); // zoffset
+            argCopy.push(args[7]); // width
+            argCopy.push(args[8]); // height
+            argCopy.push(args[9]); // depth
+            argCopy.push(args[10]); // format
+            argCopy.push(args[11]); // type
+
+            let format = args[10];
+            let type = args[11];
+            let channels = _colorChannelsInGlTextureFormat(format);
+            let channelSize = _byteSizeForWebGLType(type);
 
             let a = args[12];
             let offset = args[13];
             let w = args[7];
             let h = args[8];
             let d = args[9];
-            let len = w * h * d * 4;
+            let len = w * h * d * channels * channelSize;
 
             let cacheIndex = _getCache(a, offset, len);
 
@@ -364,61 +450,41 @@ document.body.append(resetButton);
 
             let a = args[9];
             let offset = args[10];
-            let len = args[11];
+            let length = args[11];
 
-            let cacheIndex = _getCache(a, offset, len);
+            let cacheIndex = _getCache(a, offset, length);
             argCopy.push(new GLRecordArray(cacheIndex));
             argCopy.push(0);
-            argCopy.push(len);
+            argCopy.push(length);
         } else if (name == "uniform1fv" || name == "uniform2fv" || name == "uniform3fv" || name == "uniform4fv") {
             argCopy.push(args[2]);
 
-            let a = args[3];
+            let data = args[3];
             let offset = args[4];
-            let len = args[5];
-            let array = [];
-            for (let i = offset; i < offset + len; ++i) {
-                array.push(a[i]);
-            }
-            argCopy.push(array);
-        } else if (name == "bufferData") {
-            argCopy.push(args[2]);
+            let length = args[5];
 
-            let a = args[3];
+            let cacheIndex = _getCache(data, offset, length);
+            argCopy.push(new GLRecordArray(cacheIndex));
+        } else if (name == "bufferData") {
+            argCopy.push(args[2]); // target
+
+            let srcData = args[3];
             let usage = args[4];
 
             if (args.length == 5) {
-                argCopy.push(a);
+                argCopy.push(srcData);
                 argCopy.push(usage);
             } else {
                 let offset = args[5];
-                let len = args[6];
+                let length = args[6];
 
-                let cacheIndex = -1;
-                for (let ai = 0; ai < this._arrayCache.length; ++ai) {
-                    let c = this._arrayCache[ai];
-                    if (c.buffer == a.buffer && c.offset == offset && c.length == len) {
-                        cacheIndex = ai;
-                        break;
-                    }
-                }
-                if (cacheIndex == -1) {
-                    let view = new a.constructor(a.buffer, offset, len);
-                    let array = a.constructor.from(view);
-                    cacheIndex = this._arrayCache.length;
-                    this._arrayCache.push({
-                        buffer: a.buffer,
-                        offset: offset,
-                        length: len,
-                        type: a.constructor.name,
-                        array: array
-                    });
-                }
+                let cacheIndex = _getCache(srcData, offset, length);
+
                 argCopy.push(new GLRecordArray(cacheIndex));
 
                 argCopy.push(usage);
                 argCopy.push(0);
-                argCopy.push(len);
+                argCopy.push(length);
             }
         } else {
             for (let i = 2; i < args.length; ++i) {
