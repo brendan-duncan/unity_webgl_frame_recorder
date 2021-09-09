@@ -18,8 +18,6 @@ var GLRecordFrame = {
     _lastCommandId: 1,
     _prefixCommands: [],
     _frameCommands: [],
-    _startRecordFrame: false,
-    _recordFrame: false,
     _objectIndex: 1,
     _objectMap: new Map(),
     _frameCount: 0,
@@ -58,13 +56,9 @@ var GLRecordFrame = {
 
     frameEnd: function() {
         this._inFrame = false;
-        if (this._recordFrame) {
-            this.exportCommands();
-            this._recordFrame = false;
-        }
     },
 
-    _exportCommand: function(c, lastFrame) {
+    exportCommand: function(c, lastFrame) {
         let cs = "";
         let name = this._idToCommandMap[c[0]];
 
@@ -99,7 +93,7 @@ var GLRecordFrame = {
             cs += "if(G[" + b + "])";
         }
         cs += "gl." + name + "(";
-        cs += this._argString(c[2]);
+        cs += this.argString(c[2]);
         cs += ");";
         if (isDeleteCmd) {
             let b = c[2][0].name;
@@ -110,7 +104,7 @@ var GLRecordFrame = {
         return cs;
     },
 
-    _encodeBase64: function(bytes) {
+    encodeBase64: function(bytes) {
         const _b2a = [
             "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
             "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
@@ -141,7 +135,7 @@ var GLRecordFrame = {
     },
 
     _arrayToBase64: function(a) {
-        return this._encodeBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
+        return this.encodeBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
     },
 
     exportRecord: function() {
@@ -157,7 +151,7 @@ var GLRecordFrame = {
             let c = this._prefixCommands[i];
             if (this._debugLines)
                 cs += "L=" + line + "; ";
-            cs += this._exportCommand(c, false);
+            cs += this.exportCommand(c, false);
             line++;
         }
         cs += "}\n\n";
@@ -171,7 +165,7 @@ var GLRecordFrame = {
                 let c = cmds[j];
                 if (this._debugLines)
                     cs += "L=" + line + "; ";
-                cs += this._exportCommand(c, lastFrame);
+                cs += this.exportCommand(c, lastFrame);
                 line++;
             }
             cs += "}\n\n";
@@ -327,11 +321,7 @@ main();
         document.body.removeChild(link);
     },
 
-    recordFrame: function() {
-        this._startRecordFrame = true;
-    },
-
-    _recordCommand: function(array, name, args) {
+    addCommandRecord: function(array, name, args) {
         if (!this._commandToIDMap[name]) {
             this._commandToIDMap[name] = this._lastCommandId;
             this._idToCommandMap[this._lastCommandId] = name;
@@ -411,6 +401,14 @@ main();
             return cacheIndex;
         }
 
+        // Unity uses Emscripten, which uses a large byte array for all heap data.
+        // The data passed to these commands is that large heap array, and the commands use an
+        // offset and sometimes length argument to specify what subset of the heap to use for the
+        // command data. Since we need to make a copy of the data used by the command, we need to
+        // get the offset and length arguments from the command, and clone the data from that.
+        //
+        // This could be cleaned up using a dictionary with the arg positions of the data, offset,
+        // and length arguments, to avoid having to special case these individually.
         if (name == "bufferSubData") {
             argCopy.push(args[2]);
             argCopy.push(args[3]);
@@ -566,9 +564,9 @@ main();
         }
 
         if (!this._inFrame)
-            this._recordCommand(this._prefixCommands, name, arguments);
+            this.addCommandRecord(this._prefixCommands, name, arguments);
         else if (this._currentFrameCommands)
-            this._recordCommand(this._currentFrameCommands, name, arguments);
+            this.addCommandRecord(this._currentFrameCommands, name, arguments);
     },
 
     hookWebGL: function(ctx, errorChecking) {
@@ -612,7 +610,7 @@ main();
         };
     },
 
-    _argString: function(args) {
+    argString: function(args) {
         var s = "";
         for (let i = 0; i < args.length; ++i) {
             let a = args[i];
@@ -626,7 +624,7 @@ main();
             } else if (typeof(a) == "string") {
                 s += "`" + a + "`";
             } else if (Array.isArray(a)) {
-                s += "[" + this._argString(a) + "]";
+                s += "[" + this.argString(a) + "]";
             } else if (typeof(a) == "object") {
                 if (a.length !== undefined) {
                     s += "[";
