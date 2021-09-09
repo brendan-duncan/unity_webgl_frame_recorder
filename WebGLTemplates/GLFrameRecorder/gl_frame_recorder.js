@@ -33,6 +33,9 @@ var GLRecordFrame = {
 
     _commentCommands: [
         //"getParameter",
+        "clientWaitSync",
+        "deleteSync",
+        "fenceSync"
     ],
 
     _excludeCommands: [
@@ -64,28 +67,15 @@ var GLRecordFrame = {
     _exportCommand: function(c, lastFrame) {
         let cs = "";
         let name = this._idToCommandMap[c[0]];
-        if (this._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "fenceSync")))
-            cs += "//";
 
-        if (c[1] != -1) {
-            cs += "G[" + c[1] + "]=";
-        }
-        cs += "gl." + name + "(";
-        cs += this._argString(c[2]);
-        cs += ");";
-        /*if (c[1] != -1) {
-            cs += "F[f][G[" + c[1] + "]]=";
-            let createCommands = {
-                "fenceSync": "deleteSync",
-                "createBuffer": "deleteBuffer",
-                "createTexture": "deleteTexture",
-                "createProgram": "deleteProgram",
-                "createShader": "deleteShader"
+        let createCommands = {
+            "fenceSync": "deleteSync",
+            "createBuffer": "deleteBuffer",
+            "createTexture": "deleteTexture",
+            "createProgram": "deleteProgram",
+            "createShader": "deleteShader"
+        };
 
-            };
-            cs += createCommands[name] || 0;
-            cs += ";X[" + c[1]; + "]=f;\n";
-        }
         let deleteCommands = [
             "deleteSync",
             "deleteBuffer",
@@ -93,10 +83,28 @@ var GLRecordFrame = {
             "deleteProgram",
             "deleteShader"
         ];
-        if (deleteCommands.indexOf(name) != -1) {
-            let b = this._objectMap.get(c[2][0]);
-            cs += "F[X[G[" + b + "]]]=0;X[G[" + b + "]]=0;\n";
-        }*/
+
+        if (this._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "fenceSync")))
+            cs += "//";
+
+        if (c[1] != -1) {
+            if (createCommands[name])
+                cs += "if(!G[" + c[1] + "])G[" + c[1] + "]=";
+            else 
+                cs += "G[" + c[1] + "]=";
+        }
+        let isDeleteCmd = deleteCommands.indexOf(name) != -1;
+        if (isDeleteCmd) {
+            let b = c[2][0].name;
+            cs += "if(G[" + b + "])";
+        }
+        cs += "gl." + name + "(";
+        cs += this._argString(c[2]);
+        cs += ");";
+        if (isDeleteCmd) {
+            let b = c[2][0].name;
+            cs += "G[" + b + "]=0;";
+        }
 
         cs += "\n";
         return cs;
@@ -118,12 +126,12 @@ var GLRecordFrame = {
             result += _b2a[((bytes[i - 1] & 0x0F) << 2) | (bytes[i] >> 6)];
             result += _b2a[bytes[i] & 0x3F];
         }
-        if (i === l + 1) { // 1 octet yet to write
+        if (i === l + 1) {
             result += _b2a[bytes[i - 2] >> 2];
             result += _b2a[(bytes[i - 2] & 0x03) << 4];
             result += "==";
         }
-        if (i === l) { // 2 octets yet to write
+        if (i === l) {
             result += _b2a[bytes[i - 2] >> 2];
             result += _b2a[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
             result += _b2a[(bytes[i - 1] & 0x0F) << 2];
