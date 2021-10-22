@@ -8,7 +8,18 @@ It captures all WebGL commands, buffers, and textures, over a given number of fr
 
 This can be used to diagnose issues with WebGL rendering by eliminating everything but the raw WebGL commands. This is also very helpful for submitting self-contained reproduction examples for bug reports.
 
-## Usage
+## Using With Unity
+
+* Add the Unity/WebGLTemplates folder to your Unity project's Assets folder.
+* Select GLFrameRecorder template from the WebGL Player Settings template list.
+* Build and run the project. The recording will automatically download as an HTML file after the set number of frames.
+* Open the downloaded HTML file to play back the recording.
+* Template settings:
+  * **Check every command**: Whether to run gl.getError after every command. Default 0.
+  * **Export name**: The name of the exported file (without extension). Default "WebGLRecord".
+  * **Number of frames**: The number of frames to record. Default 400.
+  * 
+## Using From HTML
 
 ### Load From CDN
 
@@ -25,17 +36,6 @@ If you prefer to host your own version, copy the script to your project and load
 ```html
 <script src="webgl_recorder.js"></script>
 ````
-
-### Using With Unity
-
-* Add the Unity/WebGLTemplates folder to your Unity project's Assets folder.
-* Select GLFrameRecorder template from the WebGL Player Settings template list.
-* Build and run the project. The recording will automatically download as an HTML file after the set number of frames.
-* Open the downloaded HTML file to play back the recording.
-* Template settings:
-  * **Check every command**: Whether to run gl.getError after every command. Default 0.
-  * **Export name**: The name of the exported file (without extension). Default "WebGLRecord".
-  * **Number of frames**: The number of frames to record. Default 400.
 
 ### Start The Recorder
 
