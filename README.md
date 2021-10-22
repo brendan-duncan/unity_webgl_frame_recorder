@@ -18,7 +18,7 @@ This can be used to diagnose issues with WebGL rendering by eliminating everythi
   * **Check every command**: Whether to run gl.getError after every command. Default 0.
   * **Export name**: The name of the exported file (without extension). Default "WebGLRecord".
   * **Number of frames**: The number of frames to record. Default 400.
-  * 
+
 ## Using From HTML
 
 ### Load From CDN
