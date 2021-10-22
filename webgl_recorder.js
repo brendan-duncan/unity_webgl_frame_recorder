@@ -10,37 +10,75 @@ class GLRecordArray {
     }
 }
 
-var GLRecordFrame = {
-    _inFrame: false,
+class WebGLRecorder {
+    constructor(options) {
+        this._inFrame = false;
 
-    _commandToIDMap: {},
-    _idToCommandMap: {},
-    _lastCommandId: 1,
-    _prefixCommands: [],
-    _frameCommands: [],
-    _objectIndex: 1,
-    _objectMap: new Map(),
-    _frameCount: 0,
-    _maxFrames: 400,
-    _debugLines: 0,
-    _currentFrameCommands: null,
-    _arrayCache: [],
-    _exportName: "WebGLRecord",
-    _canvasWidth: 960,
-    _canvasHeight: 600,
+        this._commandToIDMap = {};
+        this._idToCommandMap = {};
+        this._lastCommandId = 1;
+        this._prefixCommands = [];
+        this._frameCommands = [];
+        this._objectIndex = 1;
+        this._objectMap = new Map();
+        this._frameCount = 0;
+        this._maxFrames = 400;
+        this._debugLines = 0;
+        this._currentFrameCommands = null;
+        this._arrayCache = [];
+        this._exportName = "WebGLRecord";
+        this._canvasWidth = 800;
+        this._canvasHeight = 600;
 
-    _commentCommands: [
-        //"getParameter",
-        "clientWaitSync",
-        "deleteSync",
-        "fenceSync"
-    ],
+        if (options)
+            this._setOptions(options);
 
-    _excludeCommands: [
-        "getError",
-    ],
+        this._wrapCanvases();
 
-    frameStart: function() {
+        var self = this;
+        let __requestAnimationFrame = window.requestAnimationFrame;
+        window.requestAnimationFrame = function(cb) {
+            function glrfCallback() {
+                self._frameStart();
+                cb(performance.now());
+                self._frameEnd();
+            }
+            __requestAnimationFrame(glrfCallback);
+        };
+    }
+    
+    _setOptions(options) {
+        try {
+            this._maxFrames = parseInt(options["frames"] || this._maxFrames);
+            this._exportName = options["export"] || this._exportName;
+            this._canvasWidth = parseInt(options["width"] || this._canvasWidth);
+            this._canvasHeight = parseInt(options["height"] || this._canvasHeight);
+            this._debugLines = parseInt(options["lines"] || this._debugLines);
+        } catch (error) {
+            //
+        }
+    }
+
+    _wrapCanvases() {
+        let canvases = document.getElementsByTagName('canvas');
+        for (let i = 0; i < canvases.length; ++i) {
+            this._wrapCanvas(canvases[i]);
+        }
+    }
+
+    _wrapCanvas(c) {
+        if (!c['glrf_getContext']) {
+            c['glrf_getContext'] = c['getContext'];
+            let self = this;
+            c['getContext'] = function(a1, a2) {
+                let ctx = c['glrf_getContext'](a1, a2);
+                if (ctx) self._wrapContext(ctx, true);
+                return ctx;
+            };
+        }
+    }
+
+    _frameStart() {
         this._frameCount++;
         this._inFrame = true;
         if (this._frameCount < this._maxFrames) {
@@ -48,17 +86,17 @@ var GLRecordFrame = {
             this._frameCommands.push(this._currentFrameCommands);
         } else {
             if (this._frameCount == (this._maxFrames + 1)) {
-                this.exportRecord();
+                this._exportRecord();
             }
             this._currentFrameCommands = null;
         }
-    },
+    }
 
-    frameEnd: function() {
+    _frameEnd() {
         this._inFrame = false;
-    },
+    }
 
-    exportCommand: function(c, lastFrame) {
+    _exportCommand(c, lastFrame) {
         let cs = "";
         let name = this._idToCommandMap[c[0]];
 
@@ -78,7 +116,7 @@ var GLRecordFrame = {
             "deleteShader"
         ];
 
-        if (this._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "fenceSync")))
+        if (WebGLRecorder._commentCommands.indexOf(name) != -1 || (lastFrame && (name == "deleteSync" || name == "fenceSync")))
             cs += "//";
 
         if (c[1] != -1) {
@@ -93,7 +131,7 @@ var GLRecordFrame = {
             cs += "if(G[" + b + "])";
         }
         cs += "gl." + name + "(";
-        cs += this.argString(c[2]);
+        cs += this._stringifyArgs(c[2]);
         cs += ");";
         if (isDeleteCmd) {
             let b = c[2][0].name;
@@ -102,9 +140,9 @@ var GLRecordFrame = {
 
         cs += "\n";
         return cs;
-    },
+    }
 
-    encodeBase64: function(bytes) {
+    _encodeBase64(bytes) {
         const _b2a = [
             "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
             "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
@@ -132,13 +170,13 @@ var GLRecordFrame = {
             result += "=";
         }
         return result;
-    },
+    }
 
-    _arrayToBase64: function(a) {
-        return this.encodeBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
-    },
+    _arrayToBase64(a) {
+        return this._encodeBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
+    }
 
-    exportRecord: function() {
+    _exportRecord() {
         console.log("EXPORTING", this._exportName + ".html");
         let cs = `<html><head></head><body style="text-align: center;"><script>\n`;
 
@@ -151,7 +189,7 @@ var GLRecordFrame = {
             let c = this._prefixCommands[i];
             if (this._debugLines)
                 cs += "L=" + line + "; ";
-            cs += this.exportCommand(c, false);
+            cs += this._exportCommand(c, false);
             line++;
         }
         cs += "}\n\n";
@@ -165,7 +203,7 @@ var GLRecordFrame = {
                 let c = cmds[j];
                 if (this._debugLines)
                     cs += "L=" + line + "; ";
-                cs += this.exportCommand(c, lastFrame);
+                cs += this._exportCommand(c, lastFrame);
                 line++;
             }
             cs += "}\n\n";
@@ -313,15 +351,19 @@ main();
 </body>
 `;
 
+        this._downloadData(cs, (this._exportName || 'WebGLRecord') + ".html");
+    }
+
+    _downloadData(data, filename) {
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(new Blob([cs], {type: 'application/javascript'}));
-        link.download = (this._exportName || 'WebGLRecord') + ".html";
+        link.href = URL.createObjectURL(new Blob([data], {type: 'application/javascript'}));
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    },
+    }
 
-    addCommandRecord: function(array, name, args) {
+    _addCommandRecord(array, name, args) {
         if (!this._commandToIDMap[name]) {
             this._commandToIDMap[name] = this._lastCommandId;
             this._idToCommandMap[this._lastCommandId] = name;
@@ -549,13 +591,13 @@ main();
 
         let cmd = [this._commandToIDMap[name], res, argCopy];
         array.push(cmd);
-    },
+    }
 
-    recordCommand: function() {
+    _recordCommand() {
         let name = arguments[0];
         let res = arguments[1];
 
-        if (this._excludeCommands.indexOf(name) != -1)
+        if (WebGLRecorder._excludeCommands.indexOf(name) != -1)
             return;
 
         if (typeof(res) == "object") {
@@ -564,15 +606,16 @@ main();
         }
 
         if (!this._inFrame)
-            this.addCommandRecord(this._prefixCommands, name, arguments);
+            this._addCommandRecord(this._prefixCommands, name, arguments);
         else if (this._currentFrameCommands)
-            this.addCommandRecord(this._currentFrameCommands, name, arguments);
-    },
+            this._addCommandRecord(this._currentFrameCommands, name, arguments);
+    }
 
-    hookWebGL: function(ctx, errorChecking) {
+    _wrapContext(ctx, errorChecking) {
         if (ctx.glrf_webglAreadyHooked) return;
         ctx.glrf_webglAreadyHooked = true;
 
+        let self = this;
         for (let m in ctx) {
             if (typeof(ctx[m]) == "function") {
                 if (m != "getError") {
@@ -580,7 +623,7 @@ main();
                     if (errorChecking) {
                         ctx[m] = function() {
                             let res = origFunction.call(ctx, ...arguments);
-                            self.recordCommand(m, res, ...arguments);
+                            self._recordCommand(m, res, ...arguments);
                             let err = ctx.getError();
                             if (err) {
                                 console.error("GL ERROR", m, "Code:", err);
@@ -590,27 +633,16 @@ main();
                     } else {
                         ctx[m] = function() {
                             let res = origFunction.call(ctx, ...arguments);
-                            self.recordCommand(m, res, ...arguments);
+                            self._recordCommand(m, res, ...arguments);
                             return res;
                         };
                     }
                 }
             }
         }
+    }
 
-        var self = this;
-        window.glrf_requestAnimationFrame = window.requestAnimationFrame;
-        window.requestAnimationFrame = function(cb) {
-            function glrfCallback() {
-                self.frameStart();
-                cb(performance.now());
-                self.frameEnd();
-            }
-            window.glrf_requestAnimationFrame(glrfCallback);
-        };
-    },
-
-    argString: function(args) {
+    _stringifyArgs(args) {
         var s = "";
         for (let i = 0; i < args.length; ++i) {
             let a = args[i];
@@ -624,7 +656,7 @@ main();
             } else if (typeof(a) == "string") {
                 s += "`" + a + "`";
             } else if (Array.isArray(a)) {
-                s += "[" + this.argString(a) + "]";
+                s += "[" + this._stringifyArgs(a) + "]";
             } else if (typeof(a) == "object") {
                 if (a.length !== undefined) {
                     s += "[";
@@ -644,49 +676,15 @@ main();
         }
         return s;
     }
-};
-
-function glrf_hookIntoWebGLCanvases() {
-    let canvases = document.getElementsByTagName('canvas');
-    for (let i = 0; i < canvases.length; ++i) {
-        let c = canvases[i];
-        if (!c['glrf_getContext']) {
-            c['glrf_getContext'] = c['getContext'];
-            c['getContext'] = function(a1, a2) {
-                let ret = c['glrf_getContext'](a1, a2);
-                if (ret) GLRecordFrame.hookWebGL(ret, true);
-                return ret;
-            };
-        }
-    }
 }
 
-window.exportGLRecord = function() {
-    GLRecordFrame.exportRecord();
-};
+WebGLRecorder._commentCommands = [
+    //"getParameter",
+    "clientWaitSync",
+    "deleteSync",
+    "fenceSync"
+];
 
-// Get configuration settings from the html in the form:
-// <script id="gl_frame_recorder" type="application/json">{
-//    "frames": 400,
-//    "lines": 0
-//    "export": "WebGLRecord",
-//    "width": 960,
-//    "height": 600
-// }</script>
-let configData = document.getElementById("gl_frame_recorder");
-if (configData) {
-    try {
-        let data = JSON.parse(configData.text);
-        GLRecordFrame._maxFrames = parseInt(data["frames"] || GLRecordFrame._maxFrames);
-        GLRecordFrame._exportName = data["export"] || GLRecordFrame._exportName;
-        GLRecordFrame._canvasWidth = parseInt(data["width"] || GLRecordFrame._canvasWidth);
-        GLRecordFrame._canvasHeight = parseInt(data["height"] || GLRecordFrame._canvasHeight);
-        GLRecordFrame._debugLines = parseInt(data["lines"] || GLRecordFrame._debugLines);
-    } catch (error) {
-        //
-    }
-}
-
-glrf_hookIntoWebGLCanvases();
-window.addEventListener('load', glrf_hookIntoWebGLCanvases);
-setTimeout(glrf_hookIntoWebGLCanvases, 100);
+WebGLRecorder._excludeCommands = [
+    "getError",
+];

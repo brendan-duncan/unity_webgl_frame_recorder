@@ -8,14 +8,16 @@
   <body style="text-align: center">
     <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} style="width: {{{ WIDTH }}}px; height: {{{ HEIGHT }}}px; background: {{{ BACKGROUND_FILENAME ? 'url(\'Build/' + BACKGROUND_FILENAME.replace(/'/g, '%27') + '\') center / cover' : BACKGROUND_COLOR }}}"></canvas>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
-    <script id="gl_frame_recorder" type="application/json">{
-        "frames": "{{{ NUMBER_OF_FRAMES }}}",
-        "export": "{{{ EXPORT_NAME }}}",
-        "lines": "{{{ CHECK_EVERY_COMMAND }}}",
-        "width": {{{ WIDTH }}},
-        "height": {{{ HEIGHT }}}
-    }</script>
-    <script src="gl_frame_recorder.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/brendan-duncan/webgl_recorder/webgl_recorder.js"></script>
+    <script>
+        new WebGLRecorder({
+            "frames": "{{{ NUMBER_OF_FRAMES }}}",
+            "export": "{{{ EXPORT_NAME }}}",
+            "width": {{{ WIDTH }}},
+            "height": {{{ HEIGHT }}},
+            "lines": "{{{ CHECK_EVERY_COMMAND }}}"
+        });
+    </script>
     <script>
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         // Mobile device style: fill the whole browser client area with the game canvas:
