@@ -60,18 +60,18 @@ You can optionally configure the recorder
         "export": "WebGLRecord",
         "width": 800,
         "height": 600,
-        "lines": false
+        "lines": 0
     });
 </script>
 ```
 
 Where
 
-* **frames** is the maximum number of frames to record.
-* **export** is the basename of the generated HTML file.
-* **width** is the width of the canvas in the recording. This should match the width of the original canvas.
-* **height** is the height of the canvas in the recording. This should match the height of the original canvas.
-* **lines** if true, will do error checking around every command and include specific line numbers where the error occurs.
+* **frames** The maximum number of frames to record. Default _400_.
+* **export** The basename of the generated HTML file. Default _WebGLRecord_.
+* **width** The width of the canvas in the recording. This should match the width of the original canvas. Default _800_.
+* **height** The height of the canvas in the recording. This should match the height of the original canvas. Default _600_.
+* **lines** if 1, the recorder will do error checking around every command and include specific line numbers where the error occurs. Default _0_.
 
 ## Play The Recording
 
