@@ -313,8 +313,8 @@ function main() {
     let frame = 0;
     let t0 = performance.now();
     function drawFrame() {
+        if (frame >= frames.length) return;
         requestAnimationFrame(drawFrame);
-        if (frame >= frames.length) frame = frames.length - 1;
         let t1 = performance.now();
         frameLabel.innerText = "F: " + frame + "  T:" + (t1 - t0).toFixed(2);
         t0 = t1;
