@@ -318,7 +318,11 @@ function main() {
         let t1 = performance.now();
         frameLabel.innerText = "F: " + frame + "  T:" + (t1 - t0).toFixed(2);
         t0 = t1;
-        frames[frame](gl);
+        try {
+            frames[frame](gl);
+        } catch (error) {
+            console.error(error);
+        }
         checkError(gl, "FRAME" + frame);
         frame++;
     }
@@ -563,6 +567,26 @@ main();
                 argCopy.push(0);
                 argCopy.push(length);
             }
+        } else if (name == "readPixels") {
+            let x = args[2];
+            let y = args[3];
+            let w = args[4];
+            let h = args[5];
+            let format = args[6];
+            let type = args[7];
+            let pixels = args[8];
+            let offset = args[9];
+            let length = w * h * 8; // size?
+            let cacheIndex = _getCache(pixels, offset, length);
+
+            argCopy.push(x);
+            argCopy.push(y);
+            argCopy.push(w);
+            argCopy.push(h);
+            argCopy.push(format);
+            argCopy.push(type);
+            argCopy.push(new GLRecordArray(cacheIndex));
+            argCopy.push(0);
         } else {
             for (let i = 2; i < args.length; ++i) {
                 let a = args[i];
@@ -682,9 +706,11 @@ WebGLRecorder._commentCommands = [
     //"getParameter",
     "clientWaitSync",
     "deleteSync",
-    "fenceSync"
+    "fenceSync",
+    "readPixels"
 ];
 
 WebGLRecorder._excludeCommands = [
     "getError",
+    "readPixels"
 ];
