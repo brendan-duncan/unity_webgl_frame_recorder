@@ -85,15 +85,15 @@ class WebGLRecorder {
             this._currentFrameCommands = [];
             this._frameCommands.push(this._currentFrameCommands);
         } else {
-            if (this._frameCount == (this._maxFrames + 1)) {
-                this._exportRecord();
-            }
             this._currentFrameCommands = null;
         }
     }
 
     _frameEnd() {
         this._inFrame = false;
+        if (this._frameCount == this._maxFrames) {
+            this._exportRecord();
+        }
     }
 
     _exportCommand(c, lastFrame) {
@@ -198,7 +198,7 @@ class WebGLRecorder {
             let lastFrame = i == this._frameCommands.length - 1;
             let cmds = this._frameCommands[i];
             cs += "// Frame " + i + "\n";
-            cs += "function frame_" + i + "(gl) {\nf = " + i + ";\nF[" + i + "]={};\n";
+            cs += "function f" + i + "(gl) {\nf = " + i + ";\nF[" + i + "]={};\n";
             for (let j = 0; j < cmds.length; ++j) {
                 let c = cmds[j];
                 if (this._debugLines)
@@ -213,7 +213,7 @@ class WebGLRecorder {
 let frames = [\n`;
     for (let i = 0; i < this._frameCommands.length; ++i) {
         if (i != 0) cs += ', ';
-        cs += 'frame_' + i + '\n';
+        cs += 'f' + i + '\n';
     }
     cs += `];
 function checkError(gl, name) {
@@ -455,7 +455,18 @@ main();
         //
         // This could be cleaned up using a dictionary with the arg positions of the data, offset,
         // and length arguments, to avoid having to special case these individually.
-        if (name == "bufferSubData") {
+        if (name == "uniform1iv" || name == "uniform1fv") {
+            argCopy.push(args[2]);
+            if (args.length == 6) {
+                let a = args[3];
+                let offset = args[4];
+                let len = args[5];
+                let cacheIndex = _getCache(a, offset, len);
+                argCopy.push(new GLRecordArray(cacheIndex));
+                argCopy.push(0);
+                argCopy.push(len);
+            }
+        } else if (name == "bufferSubData") {
             argCopy.push(args[2]);
             argCopy.push(args[3]);
 
