@@ -466,6 +466,16 @@ main();
                 argCopy.push(0);
                 argCopy.push(len);
             }
+        } else if (name == "clearBufferfv") {
+            argCopy.push(args[2]);
+            argCopy.push(args[3]);
+            if (args.length == 6) {
+                let a = args[4];
+                let offset = args[5];
+                let cacheIndex = _getCache(a, offset, 4);
+                argCopy.push(new GLRecordArray(cacheIndex));
+                argCopy.push(0);
+            }
         } else if (name == "bufferSubData") {
             argCopy.push(args[2]);
             argCopy.push(args[3]);
