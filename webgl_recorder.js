@@ -501,14 +501,13 @@ main();
 
             let a = args[10]; // pixels
             let offset = args[11]; // srcOffset
-            let w = args[6];
-            let h = args[7];
+            let w = args[5];
+            let h = args[6];
             let format = args[8];
             let type = args[9];
             let channels = _colorChannelsInGlTextureFormat(format);
             let channelSize = _byteSizeForWebGLType(type);
             let len = w * h * channels * channelSize;
-
             let cacheIndex = _getCache(a, offset, len);
 
             argCopy.push(new GLRecordArray(cacheIndex)); // pixels
