@@ -489,6 +489,30 @@ main();
             argCopy.push(new GLRecordArray(cacheIndex));
             argCopy.push(0);
             argCopy.push(len);
+        } else if (name == "texImage2D") {
+            argCopy.push(args[2]); // target
+            argCopy.push(args[3]); // level
+            argCopy.push(args[4]); // internalFormat
+            argCopy.push(args[5]); // width
+            argCopy.push(args[6]); // height
+            argCopy.push(args[7]); // border
+            argCopy.push(args[8]); // format
+            argCopy.push(args[9]); // type
+
+            let a = args[10]; // pixels
+            let offset = args[11]; // srcOffset
+            let w = args[6];
+            let h = args[7];
+            let format = args[8];
+            let type = args[9];
+            let channels = _colorChannelsInGlTextureFormat(format);
+            let channelSize = _byteSizeForWebGLType(type);
+            let len = w * h * channels * channelSize;
+
+            let cacheIndex = _getCache(a, offset, len);
+
+            argCopy.push(new GLRecordArray(cacheIndex)); // pixels
+            argCopy.push(0); // offset
         } else if (name == "texSubImage2D") {
             argCopy.push(args[2]); // target
             argCopy.push(args[3]); // level
@@ -513,6 +537,33 @@ main();
 
             argCopy.push(new GLRecordArray(cacheIndex));
             argCopy.push(0);
+        } else if (name == "texImage3D") {
+            argCopy.push(args[2]); // target
+            argCopy.push(args[3]); // level
+            argCopy.push(args[4]); // internalformat
+            argCopy.push(args[5]); // width
+            argCopy.push(args[6]); // height
+            argCopy.push(args[7]); // depth
+            argCopy.push(args[8]); // border
+            argCopy.push(args[9]); // format
+            argCopy.push(args[10]); // type
+
+            let format = args[9];
+            let type = args[10];
+            let channels = _colorChannelsInGlTextureFormat(format);
+            let channelSize = _byteSizeForWebGLType(type);
+
+            let a = args[11];
+            let offset = args[12];
+            let w = args[5];
+            let h = args[6];
+            let d = args[7];
+            let len = w * h * d * channels * channelSize;
+
+            let cacheIndex = _getCache(a, offset, len);
+
+            argCopy.push(new GLRecordArray(cacheIndex)); // pixels
+            argCopy.push(0); // offset
         } else if (name == "texSubImage3D") {
             argCopy.push(args[2]); // target
             argCopy.push(args[3]); // level
